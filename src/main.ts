@@ -17,6 +17,9 @@ const EMBED_RE = /!\[\[([^\]|#]+)(?:[|#][^\]]*)?\]\]|!\[[^\]]*\]\(([^)]+)\)/g;
 /** Delay before rescanning, to let Obsidian finish copying + inserting the embed. */
 const SETTLE_MS = 400;
 
+/** Debounce for editor-change, so we only scan after typing pauses. */
+const TYPE_SETTLE_MS = 700;
+
 /** Written to the console the moment the bundle is evaluated. Distinguishes a
  * parse/eval failure (never logged) from an onload failure (logged). */
 console.log("[audio-tags] module evaluated");
@@ -24,6 +27,10 @@ console.log("[audio-tags] module evaluated");
 export default class AudioTagsPlugin extends Plugin {
   settings: AudioTagsSettings = DEFAULT_SETTINGS;
   private scanning = false;
+  /** Debounce timer for editor-change. */
+  private typeTimer: number | null = null;
+  /** Text at the end of the last scan, to skip no-op rescans (incl. our own insert). */
+  private lastScanned = new WeakMap<Editor, string>();
 
   async onload(): Promise<void> {
     const steps: string[] = [];
@@ -108,10 +115,18 @@ export default class AudioTagsPlugin extends Plugin {
       }),
     );
 
-    // Paste (desktop; Android's context-menu paste fires nothing).
+    // Pasted/dropped from the OS: not covered by editor-change reliably.
     this.registerEvent(
       this.app.workspace.on("editor-paste", (_evt, editor, info) => {
         this.scheduleScan(editor, info.file?.path);
+      }),
+    );
+
+    // General catch-all: typed, autocompleted, drag-inserted, or pasted embeds.
+    // Also the only trigger that fires for Android's context-menu paste.
+    this.registerEvent(
+      this.app.workspace.on("editor-change", (editor, info) => {
+        this.scheduleTypedScan(editor, info.file?.path);
       }),
     );
     step("editor events registered");
@@ -269,12 +284,26 @@ export default class AudioTagsPlugin extends Plugin {
     window.setTimeout(() => void this.scan(editor, sourcePath), SETTLE_MS);
   }
 
+  /** Debounced scan for typing/autocomplete edits, so we run once the user pauses. */
+  private scheduleTypedScan(editor: Editor, sourcePath?: string): void {
+    if (!sourcePath || !this.settings.insertIntoNotes) return;
+    if (this.typeTimer !== null) window.clearTimeout(this.typeTimer);
+    this.typeTimer = window.setTimeout(() => {
+      this.typeTimer = null;
+      void this.scan(editor, sourcePath);
+    }, TYPE_SETTLE_MS);
+  }
+
   /** Scan a note's embeds and annotate any audio embed that is not yet annotated. */
   private async scan(editor: Editor, sourcePath?: string): Promise<void> {
     if (this.scanning || !sourcePath || !this.settings.insertIntoNotes) return;
+    const text = editor.getValue();
+    // Nothing changed since the last pass (e.g. our own replaceRange re-fired
+    // editor-change): skip the work entirely.
+    if (this.lastScanned.get(editor) === text) return;
     this.scanning = true;
     try {
-      const lines = editor.getValue().split("\n");
+      const lines = text.split("\n");
 
       // Walk bottom-up so earlier line indices stay valid as we insert.
       for (let i = lines.length - 1; i >= 0; i--) {
@@ -302,6 +331,8 @@ export default class AudioTagsPlugin extends Plugin {
         editor.replaceRange("\n" + insert, { line: i, ch: lines[i].length });
       }
     } finally {
+      // Record the post-scan text so the change we just caused is not rescanned.
+      this.lastScanned.set(editor, editor.getValue());
       this.scanning = false;
     }
   }

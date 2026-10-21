@@ -123,9 +123,13 @@ the app. There is no live reload on mobile.
 
 ## Triggers
 
-- `editor-drop` / `editor-paste` — interactive insert; the note is known.
+- `editor-change` — the general case: a typed, autocompleted, drag-inserted or
+  pasted embed is annotated after you pause typing (debounced).
+- `editor-drop` / `editor-paste` — OS drop/paste of a new file.
 - `vault.on('create')` — fallback for attach paths with no editor event
   (e.g. Android share sheet). Correlates with the active note.
 - Command **"Insert audio metadata for embeds in this note"** — manual.
 
-Insertion is idempotent: re-running skips an embed that is already annotated.
+Insertion runs after any `editor-change`, but is idempotent: an embed already
+followed by the exact card it would produce is skipped, so typing elsewhere never
+re-inserts, and a note with the same audio embedded twice gets one card per embed.
