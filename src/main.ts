@@ -1,9 +1,15 @@
-import { Editor, MarkdownView, Plugin, TFile } from "obsidian";
+import { Editor, MarkdownView, Menu, Modal, Notice, Plugin, TFile, TAbstractFile } from "obsidian";
 import { AudioTagsSettings, DEFAULT_SETTINGS, AudioTagsSettingTab } from "./settings";
 import { buildInsert } from "./format";
 import { isAudioFile, parseAudio, saveArt, type ParsedAudio } from "./metadata";
 import { AudioView, AUDIO_VIEW_TYPE, VIEW_EXTENSIONS } from "./audioView";
-import { ensureSidecar } from "./sidecar";
+import {
+  ensureSidecar,
+  generateAllSidecars,
+  removeAllSidecars,
+  sidecarFor,
+  allSidecars,
+} from "./sidecar";
 
 /** Matches a wiki embed ![[target]] / ![[target|alias]] and markdown image ![](target). */
 const EMBED_RE = /!\[\[([^\]|#]+)(?:[|#][^\]]*)?\]\]|!\[[^\]]*\]\(([^)]+)\)/g;
@@ -52,12 +58,122 @@ export default class AudioTagsPlugin extends Plugin {
       );
     });
 
+    this.registerCommands();
+    this.registerMenus();
+  }
+
+  private registerCommands(): void {
     this.addCommand({
       id: "insert-audio-metadata",
       name: "Insert audio metadata for embeds in this note",
       editorCallback: (editor, view) => void this.scan(editor, view.file?.path),
     });
+
+    this.addCommand({
+      id: "sidecar-for-active-file",
+      name: "Create sidecar for active audio file",
+      checkCallback: (checking) => {
+        const file = this.audioFileFromActiveView();
+        if (!file) return false;
+        if (!checking) void this.createSidecarFor([file]);
+        return true;
+      },
+    });
+
+    this.addCommand({
+      id: "generate-all-sidecars",
+      name: "Generate sidecars for all audio files",
+      callback: () => void this.generateAllSidecars(),
+    });
+
+    this.addCommand({
+      id: "clear-all-sidecars",
+      name: "Clear all sidecar files",
+      callback: () => void this.clearSidecars(),
+    });
   }
+
+  private registerMenus(): void {
+    // Right-click a single node.
+    this.registerEvent(
+      this.app.workspace.on("file-menu", (menu: Menu, file: TAbstractFile) => {
+        if (file instanceof TFile && isAudioFile(file.path)) this.addSidecarMenuItems(menu, [file]);
+      }),
+    );
+    // Right-click a multi-selection in the file explorer.
+    this.registerEvent(
+      this.app.workspace.on("files-menu", (menu: Menu, files: TAbstractFile[]) => {
+        const audios = files.filter((f): f is TFile => f instanceof TFile && isAudioFile(f.path));
+        if (audios.length) this.addSidecarMenuItems(menu, audios);
+      }),
+    );
+  }
+
+  /** Add "create / clear sidecar" entries for the given audio files. */
+  private addSidecarMenuItems(menu: Menu, audios: TFile[]): void {
+    const label = audios.length > 1 ? ` for ${audios.length} audio files` : "";
+    menu.addSeparator();
+    menu.addItem((item) =>
+      item
+        .setTitle(`Audio tags: create sidecar${label}`)
+        .setIcon("file-plus")
+        .onClick(() => void this.createSidecarFor(audios)),
+    );
+    if (audios.some((f) => sidecarFor(this.app, f))) {
+      menu.addItem((item) =>
+        item
+          .setTitle(`Audio tags: clear sidecar${label}`)
+          .setIcon("trash")
+          .onClick(() => void this.clearSidecarsFor(audios)),
+      );
+    }
+  }
+
+  /** The audio file open in the active leaf. */
+  private audioFileFromActiveView(): TFile | null {
+    const file = this.app.workspace.getActiveFile();
+    return file && isAudioFile(file.path) ? file : null;
+  }
+
+  // --- actions invoked from settings, commands and menus ---
+
+  async createSidecarFor(audios: TFile[]): Promise<void> {
+    let created = 0;
+    for (const audio of audios) {
+      const before = sidecarFor(this.app, audio);
+      const path = await ensureSidecar(this.app, audio);
+      if (path && !before) created++;
+    }
+    new Notice(`Audio tags: created ${created} sidecar file(s).`);
+  }
+
+  async generateAllSidecars(): Promise<void> {
+    const progress = new Notice("Audio tags: generating sidecars…", 0);
+    const { done, failed } = await generateAllSidecars(this.app);
+    progress.hide();
+    new Notice(`Audio tags: ${done} sidecar(s) ready${failed ? `, ${failed} failed` : ""}.`);
+  }
+
+  async clearSidecars(): Promise<void> {
+    const count = allSidecars(this.app).length;
+    if (!count) {
+      new Notice("Audio tags: no sidecar files found.");
+      return;
+    }
+    if (!(await confirmModal(this.app, `Move ${count} sidecar file(s) to the trash?`))) return;
+    const { done, failed } = await removeAllSidecars(this.app);
+    new Notice(`Audio tags: trashed ${done} sidecar(s)${failed ? `, ${failed} failed` : ""}.`);
+  }
+
+  private async clearSidecarsFor(audios: TFile[]): Promise<void> {
+    const sidecars = audios.map((f) => sidecarFor(this.app, f)).filter((f): f is TFile => !!f);
+    if (!sidecars.length) return;
+    if (!(await confirmModal(this.app, `Move ${sidecars.length} sidecar file(s) to the trash?`))) return;
+    for (const file of sidecars) await this.app.fileManager.trashFile(file);
+    new Notice(`Audio tags: trashed ${sidecars.length} sidecar(s).`);
+  }
+
+  // --- note insertion ---
 
   async loadSettings(): Promise<void> {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
@@ -136,4 +252,24 @@ export default class AudioTagsPlugin extends Plugin {
     }
     return true;
   }
+}
+
+/** Minimal yes/no modal. ConfirmationModal is 1.13+, above our minAppVersion. */
+function confirmModal(app: import("obsidian").App, message: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const modal = new Modal(app);
+    modal.contentEl.createEl("p", { text: message });
+    const row = modal.contentEl.createDiv({ cls: "modal-button-container" });
+    let answer = false;
+    row.createEl("button", { text: "Cancel" }).onclick = () => modal.close();
+    row.createEl("button", { text: "Trash", cls: "mod-warning" }).onclick = () => {
+      answer = true;
+      modal.close();
+    };
+    modal.onClose = () => {
+      modal.contentEl.empty();
+      resolve(answer);
+    };
+    modal.open();
+  });
 }

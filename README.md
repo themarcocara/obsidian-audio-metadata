@@ -86,11 +86,24 @@ Notes:
 A companion `.md` is created next to each audio file, in the user's attachment
 folder, with the metadata as **YAML frontmatter** (so Obsidian search and
 Properties index it) plus readable body text. An existing sidecar is never
-overwritten, and one is detected by its `audio:` frontmatter link to the binary.
+overwritten.
+
+Every sidecar carries the marker `audio-tags-sidecar: true` in its frontmatter.
+That marker is how the plugin **positively identifies** its own sidecars, so
+"clear all" can never touch a note you wrote yourself.
 
 Core search does **not** index non-markdown files, so the binary's own node can
 never carry searchable text — the sidecar is the only way to make audio metadata
 searchable.
+
+### Managing sidecars
+
+- Settings → **Generate sidecars for all audio files** and **Clear all sidecar
+  files** (the latter moves them to the system trash, after confirmation).
+- Command palette: *Create sidecar for active audio file*, *Generate sidecars for
+  all audio files*, *Clear all sidecar files*.
+- Right-click an audio node in the file explorer (single or a multi-selection)
+  → *Audio tags: create sidecar…* / *clear sidecar…*.
 
 ## Development
 

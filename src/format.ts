@@ -194,9 +194,13 @@ export function buildMarkdown(
 
   if (!frontmatter) return body.join("\n");
 
-  const fm = [`audio: ${yamlString(link)}`, ...pairs
-    .filter(([, v]) => v !== undefined && v !== "")
-    .map(([k, v]) => `${k}: ${yamlString(String(v))}`)];
+  const fm = [
+    "audio-tags-sidecar: true",
+    `audio: ${yamlString(link)}`,
+    ...pairs
+      .filter(([, v]) => v !== undefined && v !== "")
+      .map(([k, v]) => `${k}: ${yamlString(String(v))}`),
+  ];
   return ["---", ...fm, "---", "", ...body].join("\n");
 }
 

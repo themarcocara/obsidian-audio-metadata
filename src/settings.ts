@@ -90,5 +90,22 @@ export class AudioTagsSettingTab extends PluginSettingTab {
       () => s.sidecar,
       (v) => (s.sidecar = v),
     );
+
+    new Setting(containerEl)
+      .setName("Generate sidecars for all audio files")
+      .setDesc("Create a missing sidecar for every audio file in the vault.")
+      .addButton((b) =>
+        b.setButtonText("Generate all").onClick(() => void this.plugin.generateAllSidecars()),
+      );
+
+    new Setting(containerEl)
+      .setName("Clear all sidecar files")
+      .setDesc("Move every sidecar created by this plugin to the system trash.")
+      .addButton((b) =>
+        b
+          .setButtonText("Clear all")
+          .setDestructive()
+          .onClick(() => void this.plugin.clearSidecars()),
+      );
   }
 }

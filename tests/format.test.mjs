@@ -86,6 +86,7 @@ test("buildMarkdown sidecar: frontmatter with audio link and searchable fields",
   const out = buildMarkdown(tags, "song.mp3", null, true);
   const lines = out.split("\n");
   assert.equal(lines[0], "---");
+  assert.ok(lines.includes("audio-tags-sidecar: true"));
   assert.ok(lines.includes('audio: "[[song.mp3]]"'));
   assert.ok(lines.includes('title: "Song"'));
   assert.ok(lines.includes('artist: "Artist"'));
