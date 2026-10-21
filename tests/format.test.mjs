@@ -94,6 +94,13 @@ test("buildMarkdown sidecar: frontmatter with audio link and searchable fields",
   assert.equal(lines.filter((l) => l === "---").length, 2);
 });
 
+test("sidecar body embeds the audio player; fragment does not", () => {
+  const side = buildMarkdown(tags, "song.mp3", null, true);
+  assert.ok(side.includes("![[song.mp3]]"));
+  const frag = buildMarkdown(tags, "song.mp3", null, false);
+  assert.ok(!frag.includes("![[song.mp3]]"));
+});
+
 test("buildMarkdown title falls back to the name without extension", () => {
   const out = buildMarkdown({ common: {}, format: {} }, "My Track.flac", null, true);
   assert.ok(out.includes('title: "My Track"'));

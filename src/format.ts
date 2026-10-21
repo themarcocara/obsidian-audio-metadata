@@ -184,6 +184,12 @@ export function buildMarkdown(
   const body: string[] = [];
   body.push(`Audio metadata for ${link}.`);
   body.push("");
+  // Player embed (only when writing a real note; the custom view renders its
+  // own player, and a fragment is inserted into a note that already has one).
+  if (frontmatter) {
+    body.push(`![[${audioName}]]`);
+    body.push("");
+  }
   for (const [k, v] of pairs) {
     if (v !== undefined && v !== "") body.push(`**${k}:** ${oneLine(v)}`);
   }
