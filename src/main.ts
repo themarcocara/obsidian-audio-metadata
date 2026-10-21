@@ -1,7 +1,9 @@
 import { Editor, MarkdownView, Plugin, TFile } from "obsidian";
 import { AudioTagsSettings, DEFAULT_SETTINGS, AudioTagsSettingTab } from "./settings";
 import { buildInsert } from "./format";
-import { isAudioFile, parseAudio, saveArt } from "./metadata";
+import { isAudioFile, parseAudio, saveArt, type ParsedAudio } from "./metadata";
+import { AudioView, AUDIO_VIEW_TYPE, VIEW_EXTENSIONS } from "./audioView";
+import { ensureSidecar } from "./sidecar";
 
 /** Matches a wiki embed ![[target]] / ![[target|alias]] and markdown image ![](target). */
 const EMBED_RE = /!\[\[([^\]|#]+)(?:[|#][^\]]*)?\]\]|!\[[^\]]*\]\(([^)]+)\)/g;
@@ -16,6 +18,12 @@ export default class AudioTagsPlugin extends Plugin {
   async onload(): Promise<void> {
     await this.loadSettings();
     this.addSettingTab(new AudioTagsSettingTab(this.app, this));
+
+    // Custom preview for audio files (takes over the built-in player).
+    this.registerView(AUDIO_VIEW_TYPE, (leaf) => new AudioView(leaf, this));
+    if (this.settings.customView) {
+      this.registerExtensions(VIEW_EXTENSIONS, AUDIO_VIEW_TYPE);
+    }
 
     // Interactive drop, pre-insert: Obsidian inserts the embed after this fires.
     this.registerEvent(
@@ -37,6 +45,7 @@ export default class AudioTagsPlugin extends Plugin {
       this.registerEvent(
         this.app.vault.on("create", (file) => {
           if (!(file instanceof TFile) || !isAudioFile(file.path)) return;
+          if (this.settings.sidecar) void ensureSidecar(this.app, file);
           const view = this.app.workspace.getActiveViewOfType(MarkdownView);
           this.scheduleScan(view?.editor, view?.file?.path);
         }),
@@ -58,6 +67,12 @@ export default class AudioTagsPlugin extends Plugin {
     await this.saveData(this.settings);
   }
 
+  /** Save art for a file, honouring the saveArt toggle. Used by the custom view. */
+  async saveArtFor(audio: TFile, picture: ParsedAudio["picture"], sourcePath: string): Promise<string | null> {
+    if (!picture) return null;
+    return saveArt(this.app, audio, picture, sourcePath);
+  }
+
   private scheduleScan(editor?: Editor, sourcePath?: string): void {
     if (!editor || !sourcePath) return;
     window.setTimeout(() => void this.scan(editor, sourcePath), SETTLE_MS);
@@ -65,7 +80,7 @@ export default class AudioTagsPlugin extends Plugin {
 
   /** Scan a note's embeds and annotate any audio embed that is not yet annotated. */
   private async scan(editor: Editor, sourcePath?: string): Promise<void> {
-    if (this.scanning || !sourcePath) return;
+    if (this.scanning || !sourcePath || !this.settings.insertIntoNotes) return;
     this.scanning = true;
     try {
       const lines = editor.getValue().split("\n");

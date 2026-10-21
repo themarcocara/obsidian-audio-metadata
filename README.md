@@ -10,6 +10,14 @@ Node builtins.
 
 ## Output
 
+Three surfaces, each toggleable:
+
+1. **Note insertion** — metadata next to the audio embed.
+2. **Custom audio view** — replaces the built-in audio preview with a player + metadata.
+3. **Sidecar note** — a companion `.md` next to the audio file, so the metadata is searchable.
+
+### Note insertion
+
 Two formats, chosen in settings:
 
 **Card Viewer format** (default) — a `card-music` block that the
@@ -46,11 +54,43 @@ If the audio has no title tag, the filename is used.
 
 ## Settings
 
+- **Insert metadata into notes** (on) — master switch. Off = use the plugin only
+  for the custom audio view / sidecar.
 - **Card Viewer format** (on) — card block vs plain markdown.
 - **Emit extra tags** (on) — append extra music-metadata fields as `key:` lines
   (composer, track, year, bpm, codec, bitrate, ...). Card format only.
 - **Save album art to vault** (on) — save the embedded cover as an image in the
   attachment folder and reference it. Off = no image, no file written.
+- **Custom audio view** (on) — take over the preview of audio files.
+- **Write sidecar notes** (on) — searchable companion `.md` per audio file.
+
+## Custom audio view
+
+`registerView` + `registerExtensions` override the built-in preview of a curated
+list of audio extensions (`VIEW_EXTENSIONS` in `src/audioView.ts`; video
+containers such as mp4/mkv/webm are excluded). The view is a `FileView`: an
+`<audio controls>` pointed at `vault.getResourcePath(file)`, plus the metadata
+rendered via `MarkdownRenderer`.
+
+Notes:
+
+- Registering an extension **takes over the preview vault-wide** while enabled,
+  and conflicts with other plugins registering the same extension (e.g. Waveform
+  Player, Media Extended) — last loaded wins. Toggle it off to restore the
+  built-in player.
+- With the plugin disabled, unregistering is automatic, but already-open tabs may
+  need reopening to fall back to the built-in player.
+
+## Sidecar notes
+
+A companion `.md` is created next to each audio file, in the user's attachment
+folder, with the metadata as **YAML frontmatter** (so Obsidian search and
+Properties index it) plus readable body text. An existing sidecar is never
+overwritten, and one is detected by its `audio:` frontmatter link to the binary.
+
+Core search does **not** index non-markdown files, so the binary's own node can
+never carry searchable text — the sidecar is the only way to make audio metadata
+searchable.
 
 ## Development
 

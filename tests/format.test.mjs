@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildInsert, extForMime } from "../src/format.ts";
+import { buildInsert, buildMarkdown, extForMime } from "../src/format.ts";
 
 const tags = {
   common: { title: "Song", artist: "Artist", album: "Album", date: "2020-01-02", genre: ["Rock", "Pop"] },
@@ -71,4 +71,34 @@ test("extForMime", () => {
   assert.equal(extForMime("image/jpeg"), "jpg");
   assert.equal(extForMime("image/webp"), "webp");
   assert.equal(extForMime("application/octet-stream"), "jpg");
+});
+
+test("buildMarkdown fragment: no frontmatter, links the audio", () => {
+  const out = buildMarkdown(tags, "song.mp3", "art.jpg", false);
+  assert.ok(!out.startsWith("---"));
+  assert.ok(out.includes("Audio metadata for [[song.mp3]]."));
+  assert.ok(out.includes("**title:** Song"));
+  assert.ok(out.includes("**artist:** Artist"));
+  assert.ok(out.endsWith("![[art.jpg]]"));
+});
+
+test("buildMarkdown sidecar: frontmatter with audio link and searchable fields", () => {
+  const out = buildMarkdown(tags, "song.mp3", null, true);
+  const lines = out.split("\n");
+  assert.equal(lines[0], "---");
+  assert.ok(lines.includes('audio: "[[song.mp3]]"'));
+  assert.ok(lines.includes('title: "Song"'));
+  assert.ok(lines.includes('artist: "Artist"'));
+  assert.ok(lines.includes('duration: "65"'));
+  assert.equal(lines.filter((l) => l === "---").length, 2);
+});
+
+test("buildMarkdown title falls back to the name without extension", () => {
+  const out = buildMarkdown({ common: {}, format: {} }, "My Track.flac", null, true);
+  assert.ok(out.includes('title: "My Track"'));
+});
+
+test("buildMarkdown escapes quotes in frontmatter", () => {
+  const out = buildMarkdown({ common: { title: 'He said "hi"' }, format: {} }, "a.mp3", null, true);
+  assert.ok(out.includes('title: "He said \\"hi\\""'));
 });

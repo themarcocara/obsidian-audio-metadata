@@ -59,7 +59,7 @@ function join(arr?: string[] | null): string | undefined {
  * Curated flat extra tags. Structured/multi-line fields (lyrics, pictures,
  * replaygain) are deliberately skipped: they cannot survive the one-line-per-key format.
  */
-function extraPairs(tags: AudioTags): [string, string][] {
+export function extraTagPairs(tags: AudioTags): [string, string][] {
   const c = tags.common;
   const f = tags.format;
   const raw: [string, string | number | boolean | undefined][] = [
@@ -129,7 +129,7 @@ export function buildInsert(tags: AudioTags, fileName: string, opts: RenderOptio
     .map(([k, v]) => `${k}: ${oneLine(String(v))}`);
 
   if (opts.extraTags) {
-    for (const [k, v] of extraPairs(tags)) body.push(`${k}: ${oneLine(v)}`);
+    for (const [k, v] of extraTagPairs(tags)) body.push(`${k}: ${oneLine(v)}`);
   }
 
   return ["```card-music", ...body, "```"].join("\n");
@@ -144,3 +144,59 @@ export function extForMime(mime: string): string {
   if (m.includes("bmp")) return "bmp";
   return "jpg";
 }
+
+/** Minimal YAML scalar quoting. */
+function yamlString(s: string): string {
+  return `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\r?\n/g, " ")}"`;
+}
+
+/**
+ * Build a scrap of plain markdown holding the audio metadata, for the custom
+ * audio view to render and (optionally) for a searchable sidecar note.
+ * @param tags parsed metadata
+ * @param audioName audio file name including extension (e.g. "song.mp3")
+ * @param poster vault path of the saved art, or null
+ * @param frontmatter wrap the fields in YAML frontmatter so the sidecar is
+ *   indexed by Obsidian search / Properties, instead of as a fenced card.
+ */
+export function buildMarkdown(
+  tags: AudioTags,
+  audioName: string,
+  poster: string | null,
+  frontmatter: boolean,
+): string {
+  const c = tags.common;
+  const fallback = audioName.replace(/\.[^.]+$/, "");
+  const title = c.title?.trim() || fallback;
+  const date = c.date || c.releasedate;
+  const link = `[[${audioName}]]`;
+
+  const pairs: [string, string | undefined][] = [
+    ["title", title],
+    ["artist", c.artist],
+    ["album", c.album],
+    ["date", date],
+    ["duration", tags.format.duration != null ? String(Math.round(tags.format.duration)) : undefined],
+    ["genre", join(c.genre)],
+    ...extraTagPairs(tags),
+  ];
+
+  const body: string[] = [];
+  body.push(`Audio metadata for ${link}.`);
+  body.push("");
+  for (const [k, v] of pairs) {
+    if (v !== undefined && v !== "") body.push(`**${k}:** ${oneLine(v)}`);
+  }
+  if (poster) {
+    body.push("");
+    body.push(`![[${poster}]]`);
+  }
+
+  if (!frontmatter) return body.join("\n");
+
+  const fm = [`audio: ${yamlString(link)}`, ...pairs
+    .filter(([, v]) => v !== undefined && v !== "")
+    .map(([k, v]) => `${k}: ${yamlString(String(v))}`)];
+  return ["---", ...fm, "---", "", ...body].join("\n");
+}
+
