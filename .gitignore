@@ -1,0 +1,8 @@
+node_modules/
+.cache/
+main.js
+main.js.map
+*.map
+core.*
+.obsidian/
+.DS_Store

@@ -1,0 +1,20 @@
+{
+  "name": "audio-tags",
+  "version": "0.1.0",
+  "description": "Obsidian plugin: insert audio metadata next to audio embeds.",
+  "private": true,
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "dependencies": {
+    "music-metadata": "^12.2.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "esbuild": "^0.25.0",
+    "obsidian": "latest",
+    "typescript": "^5.6.0"
+  }
+}

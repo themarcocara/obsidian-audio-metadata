@@ -1,0 +1,9 @@
+{
+  "id": "audio-tags",
+  "name": "Audio Tags",
+  "version": "0.1.0",
+  "minAppVersion": "1.6.0",
+  "description": "Parse metadata from audio attachments (title, artist, album, album art, ...) and insert it next to the audio embed.",
+  "author": "local",
+  "isDesktopOnly": false
+}
