@@ -17,18 +17,88 @@ const EMBED_RE = /!\[\[([^\]|#]+)(?:[|#][^\]]*)?\]\]|!\[[^\]]*\]\(([^)]+)\)/g;
 /** Delay before rescanning, to let Obsidian finish copying + inserting the embed. */
 const SETTLE_MS = 400;
 
+/** Written to the console the moment the bundle is evaluated. Distinguishes a
+ * parse/eval failure (never logged) from an onload failure (logged). */
+console.log("[audio-tags] module evaluated");
+
 export default class AudioTagsPlugin extends Plugin {
   settings: AudioTagsSettings = DEFAULT_SETTINGS;
   private scanning = false;
 
   async onload(): Promise<void> {
+    const steps: string[] = [];
+    const step = (m: string) => {
+      steps.push(`${new Date().toISOString()}  ${m}`);
+      console.log(`[audio-tags] ${m}`);
+    };
+
+    try {
+      await this.onloadInner(step);
+      step("onload complete");
+    } catch (e) {
+      const err = e as Error;
+      const report = [
+        "audio-tags failed to load",
+        "========================",
+        "",
+        "Steps:",
+        ...steps,
+        "",
+        "Error:",
+        `${err?.constructor?.name ?? "Error"}: ${err?.message ?? String(e)}`,
+        "",
+        err?.stack ?? "(no stack)",
+      ].join("\n");
+
+      // Goes to logcat as [INFO:CONSOLE(...)] under the chromium/Capacitor tag.
+      console.error("[audio-tags] ONLOAD FAILED\n" + report);
+
+      // Also lands in the vault, readable on-device without logcat.
+      try {
+        await this.writeDiagnostic(report);
+      } catch (e2) {
+        console.error("[audio-tags] could not write diagnostic file", e2);
+      }
+
+      // Swallowed on purpose: keep the plugin "loaded" so the settings tab and
+      // the three-dot Options entry stay available for inspection.
+      new Notice(`audio-tags failed to load: ${err?.message ?? String(e)}`, 0);
+    }
+  }
+
+  /**
+   * Write the diagnostic report next to the plugin, inside the config folder so
+   * it never clutters notes.
+   */
+  private async writeDiagnostic(text: string): Promise<void> {
+    const path = `${this.app.vault.configDir}/plugins/audio-tags/error.txt`;
+    await this.app.vault.adapter.write(path, text);
+  }
+
+  private async onloadInner(step: (m: string) => void): Promise<void> {
+    step("loading settings");
     await this.loadSettings();
+    step(`settings: ${JSON.stringify(this.settings)}`);
+
     this.addSettingTab(new AudioTagsSettingTab(this.app, this));
+    step("settings tab registered");
 
     // Custom preview for audio files (takes over the built-in player).
     this.registerView(AUDIO_VIEW_TYPE, (leaf) => new AudioView(leaf, this));
+    step("view registered");
+
     if (this.settings.customView) {
-      this.registerExtensions(VIEW_EXTENSIONS, AUDIO_VIEW_TYPE);
+      // Guarded: claiming extensions Obsidian core already owns may throw.
+      // Non-fatal so the rest of the plugin still loads.
+      try {
+        this.registerExtensions(VIEW_EXTENSIONS, AUDIO_VIEW_TYPE);
+        step("extensions registered");
+      } catch (e) {
+        step(`registerExtensions failed (non-fatal): ${(e as Error)?.message ?? String(e)}`);
+        console.error("[audio-tags] registerExtensions failed", e);
+      }
+    } else {
+      step("custom view disabled; extensions not registered");
     }
 
     // Interactive drop, pre-insert: Obsidian inserts the embed after this fires.
@@ -44,6 +114,7 @@ export default class AudioTagsPlugin extends Plugin {
         this.scheduleScan(editor, info.file?.path);
       }),
     );
+    step("editor events registered");
 
     // Fallback for attach paths with no editor event (Android share sheet, etc.).
     // Registered after layout is ready to avoid the startup create-storm.
@@ -57,9 +128,13 @@ export default class AudioTagsPlugin extends Plugin {
         }),
       );
     });
+    step("vault create listener queued");
 
     this.registerCommands();
+    step("commands registered");
+
     this.registerMenus();
+    step("menus registered");
   }
 
   private registerCommands(): void {
