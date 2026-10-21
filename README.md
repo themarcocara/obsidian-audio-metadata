@@ -85,8 +85,9 @@ Notes:
 
 A companion `.md` is created next to each audio file, in the user's attachment
 folder, with the metadata as **YAML frontmatter** (so Obsidian search and
-Properties index it) plus readable body text. An existing sidecar is never
-overwritten.
+Properties index it) plus readable body text. The body starts with a player
+embed `![[file.mp3]]` so the sidecar plays the audio itself. An existing sidecar
+is never overwritten.
 
 Every sidecar carries the marker `audio-tags-sidecar: true` in its frontmatter.
 That marker is how the plugin **positively identifies** its own sidecars, so

@@ -19,7 +19,10 @@ const context = await esbuild.context({
   outfile: "main.js",
   format: "cjs",
   platform: "browser",
-  target: "es2020",
+  // es2018 matches Obsidian's own sample plugin. es2020+ leaves ?. and ?? in the
+  // output, which are parse errors on Android WebView < Chrome 80 (many Android
+  // 7-9 devices) and make the whole plugin fail to load.
+  target: "es2018",
   logLevel: "info",
   sourcemap: prod ? false : "inline",
   treeShaking: true,
