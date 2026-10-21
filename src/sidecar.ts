@@ -1,6 +1,6 @@
-import { App, TFile, TAbstractFile, normalizePath } from "obsidian";
+import { App, TFile, TAbstractFile } from "obsidian";
 import { buildMarkdown } from "./format";
-import { isAudioFile, parseAudio, saveArt } from "./metadata";
+import { freePath, isAudioFile, parseAudio, saveArt } from "./metadata";
 
 /**
  * Frontmatter marker that positively identifies a file as one of our sidecars.
@@ -48,13 +48,14 @@ export async function ensureSidecar(app: App, audio: TFile): Promise<string | nu
     const parsed = await parseAudio(app, audio);
     if (!parsed) return null;
 
-    const poster = parsed.picture ? await saveArt(app, audio, parsed.picture, audio.path) : null;
+    const poster = parsed.picture ? await saveArt(app, audio, parsed.picture) : null;
 
-    const desired = normalizePath(
-      await app.fileManager.getAvailablePathForAttachment(`${audio.basename}.md`, audio.path),
-    );
+    // Next to the audio file, not relative to it (applying the attachment-folder
+    // rule to the audio's own path nests it: a/attachments -> a/attachments/attachments).
+    const dir = audio.parent?.path ?? "";
+    const target = freePath(app, dir, `${audio.basename}.md`);
     const md = buildMarkdown(parsed.tags, audio.name, poster, true);
-    const file = await app.vault.create(desired, md);
+    const file = await app.vault.create(target, md);
     return file.path;
   } catch (e) {
     console.error("[audio-tags] failed to create sidecar for", audio.path, e);

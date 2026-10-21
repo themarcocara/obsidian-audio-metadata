@@ -51,10 +51,10 @@ export class AudioView extends FileView {
     const settings = this.plugin.settings;
     const poster =
       settings.saveArt && parsed.picture
-        ? await this.plugin.saveArtFor(file, parsed.picture, file.path)
+        ? await this.plugin.saveArtFor(file, parsed.picture)
         : null;
 
-    const md = buildMarkdown(parsed.tags, file.basename, poster, false);
+    const md = buildMarkdown(parsed.tags, file.name, poster, false);
     const el = root.createDiv({ cls: "audio-tags-metadata" });
     await MarkdownRenderer.render(this.app, md, el, file.path, this);
   }

@@ -135,6 +135,23 @@ export function buildInsert(tags: AudioTags, fileName: string, opts: RenderOptio
   return ["```card-music", ...body, "```"].join("\n");
 }
 
+/** "song.md" -> "song 1.md", "song 2.md" ... until `taken` returns false. */
+export function uniqueName(name: string, taken: (candidate: string) => boolean): string {
+  if (!taken(name)) return name;
+  const dot = name.lastIndexOf(".");
+  const stem = dot > 0 ? name.slice(0, dot) : name;
+  const ext = dot > 0 ? name.slice(dot) : "";
+  for (let i = 1; ; i++) {
+    const candidate = `${stem} ${i}${ext}`;
+    if (!taken(candidate)) return candidate;
+  }
+}
+
+/** Vault path of a file name inside a folder (empty folder = vault root). */
+export function pathIn(dir: string, name: string): string {
+  return dir ? `${dir}/${name}` : name;
+}
+
 /** File extension (no dot) for a picture mime type; defaults to jpg. */
 export function extForMime(mime: string): string {
   const m = mime.toLowerCase();

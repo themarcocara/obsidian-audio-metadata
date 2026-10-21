@@ -1,6 +1,6 @@
-import { App, TFile, normalizePath } from "obsidian";
+import { App, TFile } from "obsidian";
 import { parseBuffer, selectCover, type IPicture } from "music-metadata";
-import { AudioTags, extForMime } from "./format";
+import { AudioTags, extForMime, pathIn, uniqueName } from "./format";
 
 /** Audio extensions supported by music-metadata's browser parsers. */
 export const AUDIO_EXTENSIONS = new Set([
@@ -53,34 +53,34 @@ export async function parseAudio(app: App, file: TFile): Promise<ParsedAudio | n
 }
 
 /**
- * Save album art as a vault image and return its vault path, or null on failure.
- * Reuses an existing file with the same name so re-processing a track does not
- * accumulate "song 1.jpg", "song 2.jpg", ...
+ * Save album art next to the audio file and return its vault path, or null.
+ * Reuses an existing same-named file so re-processing a track (and the note
+ * insert + sidecar both pointing at the same art) yields exactly one file.
  */
 export async function saveArt(
   app: App,
   audio: TFile,
   picture: IPicture,
-  sourcePath: string,
 ): Promise<string | null> {
   try {
     const ext = extForMime(picture.format);
-    const base = audio.basename;
-    const desired = normalizePath(
-      await app.fileManager.getAvailablePathForAttachment(`${base}.${ext}`, sourcePath),
-    );
-    const dir = desired.includes("/") ? desired.slice(0, desired.lastIndexOf("/")) : "";
-    const candidate = normalizePath(dir ? `${dir}/${base}.${ext}` : `${base}.${ext}`);
+    const dir = audio.parent?.path ?? "";
+    const name = `${audio.basename}.${ext}`;
 
-    const existing = app.vault.getAbstractFileByPath(candidate);
+    const existing = app.vault.getAbstractFileByPath(pathIn(dir, name));
     if (existing instanceof TFile) return existing.path;
 
+    const target = freePath(app, dir, name);
     // Copy into a fresh ArrayBuffer of exactly the picture bytes.
-    const data = new Uint8Array(picture.data).buffer;
-    await app.vault.createBinary(desired, data);
-    return desired;
+    await app.vault.createBinary(target, new Uint8Array(picture.data).buffer);
+    return target;
   } catch (e) {
     console.error("[audio-tags] failed to save art", e);
     return null;
   }
+}
+
+/** First free path for `name` inside `dir`, appending " 1", " 2", ... on collision. */
+export function freePath(app: App, dir: string, name: string): string {
+  return pathIn(dir, uniqueName(name, (n) => app.vault.getAbstractFileByPath(pathIn(dir, n)) !== null));
 }

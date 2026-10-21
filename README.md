@@ -59,8 +59,8 @@ If the audio has no title tag, the filename is used.
 - **Card Viewer format** (on) — card block vs plain markdown.
 - **Emit extra tags** (on) — append extra music-metadata fields as `key:` lines
   (composer, track, year, bpm, codec, bitrate, ...). Card format only.
-- **Save album art to vault** (on) — save the embedded cover as an image in the
-  attachment folder and reference it. Off = no image, no file written.
+- **Save album art to vault** (on) — save the embedded cover as an image next to
+  the audio file and reference it. Off = no image, no file written.
 - **Custom audio view** (on) — take over the preview of audio files.
 - **Write sidecar notes** (on) — searchable companion `.md` per audio file.
 
@@ -83,8 +83,8 @@ Notes:
 
 ## Sidecar notes
 
-A companion `.md` is created next to each audio file, in the user's attachment
-folder, with the metadata as **YAML frontmatter** (so Obsidian search and
+A companion `.md` is created **next to** the audio file (in the audio file's own
+folder), with the metadata as **YAML frontmatter** (so Obsidian search and
 Properties index it) plus readable body text. The body starts with a player
 embed `![[file.mp3]]` so the sidecar plays the audio itself. An existing sidecar
 is never overwritten.

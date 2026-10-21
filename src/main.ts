@@ -259,9 +259,9 @@ export default class AudioTagsPlugin extends Plugin {
   }
 
   /** Save art for a file, honouring the saveArt toggle. Used by the custom view. */
-  async saveArtFor(audio: TFile, picture: ParsedAudio["picture"], sourcePath: string): Promise<string | null> {
+  async saveArtFor(audio: TFile, picture: ParsedAudio["picture"]): Promise<string | null> {
     if (!picture) return null;
-    return saveArt(this.app, audio, picture, sourcePath);
+    return saveArt(this.app, audio, picture);
   }
 
   private scheduleScan(editor?: Editor, sourcePath?: string): void {
@@ -289,7 +289,7 @@ export default class AudioTagsPlugin extends Plugin {
 
         const poster =
           this.settings.saveArt && parsed.picture
-            ? await saveArt(this.app, file, parsed.picture, sourcePath)
+            ? await saveArt(this.app, file, parsed.picture)
             : null;
 
         const insert = buildInsert(parsed.tags, file.basename, {
